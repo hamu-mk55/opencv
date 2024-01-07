@@ -1,12 +1,7 @@
+import random
+
 import cv2
 import numpy as np
-import glob
-import csv
-import os
-import shutil
-import time
-import random
-import matplotlib.pyplot as plt
 
 
 def blob_analysis(img_bgr,
