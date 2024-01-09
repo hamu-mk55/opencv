@@ -10,6 +10,7 @@ def blob_analysis(img_bgr,
                   kernel_size=3, erode_iter=0, dilate_iter=0,
                   open_flg=True,
                   blob_min=10, blob_max=None,
+                  return_if_exist=False,
                   output_seg=False,
                   output_rec=False, rec_rotate=False):
     """
@@ -25,6 +26,7 @@ def blob_analysis(img_bgr,
     :param open_flg: 収縮->膨張の順にするかどうか
     :param blob_min: ブロブ面積の最小値(Noneの場合指定なし)
     :param blob_max: ブロブ面積の最大値(Noneの場合指定なし)
+    :param return_if_exist: １個でもブロブが存在したら終了する
     :param output_seg: セグメンテーション画像を出力するかどうか
     :param output_rec: ブロブ箇所に矩形マーキング画像を出力するかどうか
     :param rec_rotate:　ブロブ矩形を回転ありにするかどうか
@@ -121,7 +123,7 @@ def blob_analysis(img_bgr,
         # Min-Rectangle
         if not rec_rotate:
             x, y, w, h = cv2.boundingRect(_max_contour)
-            res_list.append([cnt, x, y, w, h, area_label, _max_area])
+            res_list.append([area_label, _max_area, x, y, w, h])
 
             if output_rec:
                 cv2.rectangle(img_out, (x, y), (x + w, y + h),
@@ -141,7 +143,7 @@ def blob_analysis(img_bgr,
             y = _rect[0][1]
             h = max(_rect[1][0], _rect[1][1])
             w = min(_rect[1][0], _rect[1][1])
-            res_list.append([cnt, _f(x), _f(y), _f(w), _f(h), area_label, _max_area])
+            res_list.append([area_label, _max_area, _f(x), _f(y), _f(w), _f(h)])
 
             if output_rec:
                 img_out = cv2.drawContours(img_out, [_box], 0,
@@ -156,11 +158,16 @@ def blob_analysis(img_bgr,
             else:
                 img_seg[label_img == cnt + 1] = cols[cnt][0]
 
+        if return_if_exist:
+            return img_bgr, res_list, img_seg, img_out
+
+    res_list = sorted(res_list, key=lambda x: x[0], reverse=True)
+
     return img_bgr, res_list, img_seg, img_out
 
 
-def example():
-    img_file = './image/NG/002.png'
+def example(debug=True):
+    img_file = './image/NG/000.png'
     img = cv2.imread(img_file, cv2.IMREAD_COLOR)
 
     # threshold
@@ -182,8 +189,9 @@ def example():
     cv2.imwrite('seg.jpg', _seg)
     cv2.imwrite('out.jpg', _out)
 
-    for _res in res:
-        print(_res)
+    if debug:
+        for _res in res:
+            print(_res)
 
 
 if __name__ == '__main__':
