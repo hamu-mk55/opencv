@@ -10,6 +10,7 @@ def blob_analysis(img_bgr,
                   kernel_size=3, erode_iter=0, dilate_iter=0,
                   open_flg=True,
                   blob_min=10, blob_max=None,
+                  mask_img=None,
                   return_if_exist=False,
                   output_seg=False,
                   output_rec=False, rec_rotate=False):
@@ -26,6 +27,7 @@ def blob_analysis(img_bgr,
     :param open_flg: 収縮->膨張の順にするかどうか
     :param blob_min: ブロブ面積の最小値(Noneの場合指定なし)
     :param blob_max: ブロブ面積の最大値(Noneの場合指定なし)
+    :param mask_img: マスク画像
     :param return_if_exist: １個でもブロブが存在したら終了する
     :param output_seg: セグメンテーション画像を出力するかどうか
     :param output_rec: ブロブ箇所に矩形マーキング画像を出力するかどうか
@@ -55,22 +57,25 @@ def blob_analysis(img_bgr,
         raise ValueError(f'blob_analysis: illegal-mode: {mode}')
 
     # Threshold..........
-    img_mask = cv2.inRange(img, mask_low, mask_high)
+    img_bin = cv2.inRange(img, mask_low, mask_high)
 
     if inverse_mask:
-        img_mask = cv2.bitwise_not(img_mask, img_mask)
+        img_bin = cv2.bitwise_not(img_bin, img_bin)
 
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
     if open_flg:
-        img_mask = cv2.erode(img_mask, kernel, iterations=erode_iter)
-        img_mask = cv2.dilate(img_mask, kernel, iterations=dilate_iter)
+        img_bin = cv2.erode(img_bin, kernel, iterations=erode_iter)
+        img_bin = cv2.dilate(img_bin, kernel, iterations=dilate_iter)
     else:
-        img_mask = cv2.dilate(img_mask, kernel, iterations=dilate_iter)
-        img_mask = cv2.erode(img_mask, kernel, iterations=erode_iter)
+        img_bin = cv2.dilate(img_bin, kernel, iterations=dilate_iter)
+        img_bin = cv2.erode(img_bin, kernel, iterations=erode_iter)
+
+    if mask_img is not None:
+        img_bin = cv2.bitwise_and(img_bin, mask_img)
 
     # Blob Analysis.......
-    label = cv2.connectedComponentsWithStats(img_mask)
+    label = cv2.connectedComponentsWithStats(img_bin)
 
     n_label = label[0] - 1
     label_img = label[1]
@@ -169,6 +174,7 @@ def blob_analysis(img_bgr,
 def example(debug=True):
     img_file = './image/NG/000.png'
     img = cv2.imread(img_file, cv2.IMREAD_COLOR)
+    print(img.shape)
 
     # threshold
     low = np.array([0, 50, 0])
@@ -176,11 +182,16 @@ def example(debug=True):
     # low = 100
     # high = 200
 
+    mask = np.zeros_like(img)
+    mask = mask[:,:,0]
+    mask[500:, :] = 255
+
     # main
     _img, res, _seg, _out = blob_analysis(img, low, high,
                                           mode='hsv',
                                           inverse_mask=True,
                                           dilate_iter=1,
+                                          mask_img=mask,
                                           output_seg=True,
                                           output_rec=True,
                                           rec_rotate=False)
