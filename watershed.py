@@ -5,6 +5,9 @@ import csv
 
 import cv2
 import numpy as np
+from scipy import ndimage as ndi
+from skimage.segmentation import watershed
+from skimage.feature import peak_local_max
 
 
 class BlobInfo:
@@ -200,7 +203,7 @@ def check_blob_info(img_bin, img_dist):
     return blob
 
 
-def exec_watershed(img_org: np.ndarray,
+def _exec_watershed(img_org: np.ndarray,
                    img_bin: np.ndarray,
                    min_radius: int = 3,
                    use_bin_image: bool = False,
@@ -262,7 +265,7 @@ def exec_watershed(img_org: np.ndarray,
     else:
         _img_dist = img_dist / np.max(img_dist)
         _img_bin = img_bin * _img_dist
-        _img_bin = cv2.cvtColor(img_bin, cv2.COLOR_GRAY2BGR)
+        _img_bin = cv2.cvtColor(_img_bin, cv2.COLOR_GRAY2BGR)
         markers = cv2.watershed(_img_bin, markers)
 
     # 出力画像の設定
@@ -292,6 +295,33 @@ def exec_watershed(img_org: np.ndarray,
         img_seg[sure_fg == 255] = (255, 255, 255)
 
     return blob_list, img_seg
+
+
+def exec_watershed(img_org: np.ndarray,
+                   img_bin: np.ndarray,
+                   min_radius: int = 3,
+                   use_bin_image: bool = False,
+                   draw_sure_fg: bool = True):
+    img_seg = np.zeros_like(img_org)
+    blob_list = []
+
+    img_dist = ndi.distance_transform_edt(img_bin)
+
+    ksize = int((min_radius * 1.5) * 2 + 1)
+    local_maxi = peak_local_max(img_dist,
+                                footprint=np.ones((ksize, ksize)),
+                                labels=img_bin)
+
+    mask = np.zeros(img_dist.shape, dtype=bool)
+    mask[tuple(local_maxi.T)] = True
+
+    markers, _ = ndi.label(mask)
+    labels = watershed(-img_dist, markers, mask=img_bin)
+
+    labels = labels.astype(np.uint8)
+    labels = cv2.cvtColor(labels, cv2.COLOR_GRAY2BGR)
+
+    return blob_list, labels
 
 
 def blob_detection(img_org: np.ndarray,
@@ -336,6 +366,11 @@ def blob_detection(img_org: np.ndarray,
 
         _blob_list, _img_seg = exec_watershed(_img_org, _img_bin, use_bin_image=False)
         img_seg[_y0:_y1, _x0:_x1] += _img_seg
+
+        label_cnt += 1
+        out_dir = f"{debug_dir}/test"
+        os.makedirs(out_dir, exist_ok=True)
+        cv2.imwrite(f"{out_dir}/{label_cnt:04d}.png", _img_seg*50)
 
         # 出力
         for blob in _blob_list:
@@ -386,13 +421,17 @@ def blob_analysis(img_file: str):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, img = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY_INV)
 
+    cv2.imwrite("test01.png", img)
+
     img = delete_small_area(img, min_blob=0, min_hole=2)
+
+    cv2.imwrite("test02.png", img)
 
     # ブロブ処理＋領域分割処理
     img_seg = blob_detection(img_out, img,
                              csv_file=csvfile, debug_dir="./debug")
 
-    cv2.imwrite("test.png", img_seg)
+    cv2.imwrite("test03.png", img_seg)
 
 
 if __name__ == '__main__':
